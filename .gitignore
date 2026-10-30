@@ -1,5 +1,6 @@
-# 构建产物：由 build.sh 生成，不进仓库
-app/bin/lumoc
+*/app/bin/lumos
+*/app/bin/lumoc
 *.fpk
 lumo.fpk
+lumo-server.fpk
 .DS_Store

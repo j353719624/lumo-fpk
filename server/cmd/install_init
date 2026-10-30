@@ -1,0 +1,18 @@
+#!/bin/bash
+# 安装前准备：停掉旧版本进程，避免端口占用。
+
+set -u
+
+APPDEST="${TRIM_APPDEST:-}"
+PKGVAR="${TRIM_PKGVAR:-}"
+MAIN="${APPDEST}/cmd/main"
+
+if [ -x "${MAIN}" ]; then
+    "${MAIN}" stop >/dev/null 2>&1 || true
+fi
+
+if [ -n "${APPDEST}" ]; then
+    pkill -f "${APPDEST}/bin/lumos" 2>/dev/null || true
+fi
+
+exit 0

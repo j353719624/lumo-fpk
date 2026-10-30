@@ -1,0 +1,16 @@
+#!/bin/bash
+# 设置页读取：展示当前生效的端口与控制台账号。
+
+set -u
+
+PKGVAR="${TRIM_PKGVAR:-}"
+TOML="${PKGVAR}/lumos.toml"
+
+if [ -r "${TOML}" ]; then
+    printf 'bindPort=%s\n' "$(sed -n 's/^bindPort = //p' "${TOML}")"
+    printf 'kcpPort=%s\n' "$(sed -n 's/^kcpPort = //p' "${TOML}")"
+    printf 'vhostHTTPPort=%s\n' "$(sed -n 's/^vhostHTTPPort = //p' "${TOML}")"
+    printf 'webUser=%s\n' "$(sed -n 's/^user = //p' "${TOML}" | tr -d '"')"
+fi
+
+exit 0

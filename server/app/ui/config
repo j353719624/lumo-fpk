@@ -1,0 +1,15 @@
+{
+  ".url": {
+    "lumo-server.Application": {
+      "title": "LUMO 服务端",
+      "desc": "LUMO 内网穿透服务端控制台",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "",
+      "gatewaySocket": "app.sock",
+      "gatewayPrefix": "/app/lumo-server",
+      "url": "/app/lumo-server",
+      "allUsers": false
+    }
+  }
+}

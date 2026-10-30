@@ -1,0 +1,73 @@
+#!/bin/bash
+# 安装后处理：
+#   1) 用向导里的端口与控制台账号生成服务端配置（lumoc server 子命令，
+#      格式与代码始终一致）；
+#   2) 隧道密钥由服务端自动生成：配置里只写派生公钥，明文密钥写入
+#      数据目录 tunnel-secret.txt（0600），客户端连接时用；
+#   3) 控制台密码留空时自动生成，安装日志里可以看到。
+#
+# 注意：飞牛的 password 类型字段不会作为环境变量传给安装脚本，
+# 所以向导里凡是需要参与配置的字段一律用 text 类型。
+
+set -u
+
+APPDEST="${TRIM_APPDEST:-}"
+PKGVAR="${TRIM_PKGVAR:-}"
+LUMOC="${APPDEST}/bin/lumoc"
+TOML="${PKGVAR}/lumos.toml"
+SECRET_FILE="${PKGVAR}/tunnel-secret.txt"
+
+fail() {
+    if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+        printf '%s\n' "$1" >>"${TRIM_TEMP_LOGFILE}"
+    fi
+    printf '%s\n' "$1" >&2
+    exit 1
+}
+
+say() {
+    if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+        printf '%s\n' "$1" >>"${TRIM_TEMP_LOGFILE}"
+    fi
+    printf '%s\n' "$1" >&2
+}
+
+[ -n "${PKGVAR}" ] || fail "LUMO 服务端安装失败：缺少 TRIM_PKGVAR"
+[ -x "${LUMOC}" ] || fail "LUMO 服务端安装失败：缺少程序 ${LUMOC}"
+
+mkdir -p "${PKGVAR}" || fail "LUMO 服务端安装失败：无法创建数据目录 ${PKGVAR}"
+
+BIND_PORT="${bindPort:-58619}"
+KCP_PORT="${kcpPort:-47011}"
+VHOST_PORT="${vhostHTTPPort:-18080}"
+CUSER="${webUser:-admin}"
+CPASS="${webPass:-}"
+
+# 首次安装：生成服务端配置与隧道密钥
+if [ ! -f "${TOML}" ]; then
+    ARGS=(server --out "${TOML}" --bind-port "${BIND_PORT}" --kcp-port "${KCP_PORT}" \
+        --vhost-port "${VHOST_PORT}" --web-user "${CUSER}")
+    [ -n "${CPASS}" ] && ARGS+=(--web-pass "${CPASS}")
+    OUT="$("${LUMOC}" "${ARGS[@]}")" || fail "LUMO 服务端安装失败：生成配置出错"
+    SECRET=$(printf '%s\n' "${OUT}" | sed -n 's/^SECRET=//p')
+    WEBPASS=$(printf '%s\n' "${OUT}" | sed -n 's/^WEB_PASS=//p')
+
+    if [ -n "${SECRET}" ]; then
+        printf '%s' "${SECRET}" > "${SECRET_FILE}"
+        chmod 600 "${SECRET_FILE}"
+        say "隧道密钥已生成，保存在数据目录 tunnel-secret.txt（客户端连接时使用，请妥善保管）"
+    fi
+    if [ -z "${CPASS}" ] && [ -n "${WEBPASS}" ]; then
+        say "控制台账号：${CUSER}"
+        say "控制台密码：${WEBPASS}"
+    else
+        say "控制台账号：${CUSER}（密码为你安装时设置的）"
+    fi
+    say "服务端口：${BIND_PORT}  KCP 端口：${KCP_PORT}  HTTP 端口：${VHOST_PORT}"
+fi
+chmod 600 "${TOML}" 2>/dev/null || true
+
+say "LUMO 服务端安装完成"
+say "入口：飞牛桌面 → LUMO 服务端；局域网浏览器访问 http://本机IP:46351"
+
+exit 0

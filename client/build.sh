@@ -11,6 +11,10 @@
 set -e
 cd "$(dirname "$0")"
 
+# 本仓库只含打包源；Go 源码在主仓 lumo，克隆到同级目录即可直接编译：
+#   git clone https://github.com/j353719624/lumo ../lumo
+LUMO_SRC="${LUMO_SRC:-../lumo}"
+
 if [ -n "${LUMOC_BIN}" ]; then
     cp "${LUMOC_BIN}" app/bin/lumoc
 else

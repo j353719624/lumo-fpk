@@ -1,0 +1,133 @@
+#!/bin/bash
+# LUMO 服务端（fnOS）：常驻服务。
+#
+# 进程：lumos 单进程，无子进程。
+# 进程组：setsid 自成进程组，停止时按组杀。
+# 守护：watchdog 每 10 秒检查一次，进程崩了自动拉起；配合飞牛的
+#       应用开机自启，做到一直在线。
+# 控制台：TCP 端口（toml [webServer]）给局域网直连排障；unix socket
+#         给飞牛桌面网关（app/ui/config 的 gatewaySocket）。
+
+LOG_DIR="${TRIM_PKGVAR}"
+CONF="${LOG_DIR}/lumos.toml"
+BIN_DIR="${TRIM_APPDEST}/bin"
+LUMOS="${BIN_DIR}/lumos"
+# 飞牛桌面网关按 gatewaySocket 找这个 socket（与 app/ui/config 一致）
+APP_SOCKET="${TRIM_APPDEST}/app.sock"
+BASE="/app/lumo-server"
+
+log_msg() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_DIR}/info.log"
+}
+
+PID_FILE="${LOG_DIR}/lumos.pid"
+PGID_FILE="${LOG_DIR}/lumos.pgid"
+WATCH_PID="${LOG_DIR}/watchdog.pid"
+
+check_process() {
+    [ -n "$1" ] && ps -p "$1" > /dev/null 2>&1
+}
+
+start_lumos() {
+    pid=""
+    [ -r "${PID_FILE}" ] && pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+    if check_process "${pid}"; then
+        return 0
+    fi
+    if [ ! -r "${CONF}" ]; then
+        log_msg "缺少配置 ${CONF}，请重新安装"
+        return 1
+    fi
+    log_msg "启动 lumos ..."
+    # 等号形式传参，避免空值吞掉后面的参数
+    setsid "${LUMOS}" -c="${CONF}" --web-base="${BASE}" --web-socket="${APP_SOCKET}" \
+        >> "${LOG_DIR}/lumos.log" 2>&1 &
+    pid=$!
+    printf "%s" "${pid}" > "${PID_FILE}"
+    printf "%s" "${pid}" > "${PGID_FILE}"
+    log_msg "lumos pid=${pid}"
+}
+
+stop_lumos() {
+    pid=""
+    [ -r "${PID_FILE}" ] && pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+    pgid=""
+    [ -r "${PGID_FILE}" ] && pgid=$(head -n 1 "${PGID_FILE}" | tr -d '[:space:]')
+    [ -z "${pgid}" ] && [ -n "${pid}" ] && pgid="${pid}"
+
+    if [ -n "${pgid}" ] && check_process "${pgid}"; then
+        log_msg "停止 lumos pgid=${pgid}"
+        kill -TERM "-${pgid}" 2>/dev/null
+        for _ in $(seq 1 15); do
+            check_process "${pgid}" || break
+            sleep 1
+        done
+        check_process "${pgid}" && kill -KILL "-${pgid}" 2>/dev/null
+        sleep 1
+    fi
+
+    # 兜底：进程组杀仍有残留时按可执行路径清理（旧版本留下的孤儿）
+    pkill -f "${LUMOS}" 2>/dev/null
+    sleep 1
+    pkill -9 -f "${LUMOS}" 2>/dev/null
+
+    rm -f "${PID_FILE}" "${PGID_FILE}"
+}
+
+start_watchdog() {
+    wpid=""
+    [ -r "${WATCH_PID}" ] && wpid=$(head -n 1 "${WATCH_PID}" | tr -d '[:space:]')
+    if check_process "${wpid}"; then
+        return 0
+    fi
+    setsid bash "$0" watchdog >> "${LOG_DIR}/watchdog.log" 2>&1 &
+    printf "%s" "$!" > "${WATCH_PID}"
+    log_msg "watchdog pid=$!"
+}
+
+stop_watchdog() {
+    wpid=""
+    [ -r "${WATCH_PID}" ] && wpid=$(head -n 1 "${WATCH_PID}" | tr -d '[:space:]')
+    if check_process "${wpid}"; then
+        log_msg "停止 watchdog pid=${wpid}"
+        kill -TERM "${wpid}" 2>/dev/null
+        sleep 1
+        check_process "${wpid}" && kill -KILL "${wpid}" 2>/dev/null
+    fi
+    rm -f "${WATCH_PID}"
+}
+
+watchdog_loop() {
+    while true; do
+        sleep 10
+        pid=""
+        [ -r "${PID_FILE}" ] && pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+        if ! check_process "${pid}"; then
+            log_msg "watchdog: lumos 不在，重新拉起"
+            start_lumos
+        fi
+    done
+}
+
+case $1 in
+start)
+    start_lumos
+    start_watchdog
+    ;;
+watchdog)
+    watchdog_loop
+    ;;
+stop)
+    stop_watchdog
+    stop_lumos
+    rm -f "${APP_SOCKET}"
+    ;;
+status)
+    pid=""
+    [ -r "${PID_FILE}" ] && pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+    if check_process "${pid}"; then exit 0; else exit 3; fi
+    ;;
+*)
+    exit 1
+    ;;
+esac

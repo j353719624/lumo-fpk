@@ -1,0 +1,30 @@
+#!/bin/bash
+# 设置页改动后：更新控制台账号密码并重启服务。
+# 端口与隧道密钥在控制台里管理，这里只处理控制台凭据。
+
+set -u
+
+APPDEST="${TRIM_APPDEST:-}"
+PKGVAR="${TRIM_PKGVAR:-}"
+TOML="${PKGVAR}/lumos.toml"
+MAIN="${APPDEST}/cmd/main"
+
+if [ -r "${TOML}" ]; then
+    if [ -n "${webUser:-}" ]; then
+        u=$(printf '%s' "${webUser}" | sed 's/[&/\]/\\&/g')
+        sed -i "s/^user = .*/user = \"${u}\"/" "${TOML}"
+    fi
+    if [ -n "${webPass:-}" ]; then
+        p=$(printf '%s' "${webPass}" | sed 's/[&/\]/\\&/g')
+        sed -i "s/^password = .*/password = \"${p}\"/" "${TOML}"
+        chmod 600 "${TOML}"
+    fi
+fi
+
+if [ -x "${MAIN}" ]; then
+    "${MAIN}" stop >/dev/null 2>&1 || true
+    sleep 2
+    "${MAIN}" start >/dev/null 2>&1 || true
+fi
+
+exit 0

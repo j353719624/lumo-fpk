@@ -1,0 +1,18 @@
+[
+  {
+    "stepTitle": "服务端口",
+    "items": [
+      { "type": "text", "field": "bindPort", "label": "服务端口（客户端连接用）", "rules": [], "initValue": "58619", "options": [] },
+      { "type": "text", "field": "kcpPort", "label": "KCP 端口（UDP 传输，填 0 表示关闭）", "rules": [], "initValue": "47011", "options": [] },
+      { "type": "text", "field": "vhostHTTPPort", "label": "HTTP 虚拟主机端口（填 0 表示关闭）", "rules": [], "initValue": "18080", "options": [] }
+    ]
+  },
+  {
+    "stepTitle": "控制台登录",
+    "items": [
+      { "type": "text", "field": "webUser", "label": "登录账号", "rules": [], "initValue": "admin", "options": [] },
+      { "type": "text", "field": "webPass", "label": "登录密码（留空自动生成，安装完成后在应用日志里查看）", "rules": [], "initValue": "", "options": [] },
+      { "type": "tips", "field": "tips1", "label": "说明", "rules": [], "initValue": "", "options": [], "helpText": "安装完成后从飞牛桌面点「LUMO 服务端」进入控制台；隧道密钥自动生成，在数据目录 tunnel-secret.txt 里，客户端安装时填它即可连上来。路由器 / 防火墙需要放行上面填的端口。" }
+    ]
+  }
+]

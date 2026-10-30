@@ -1,2 +1,6 @@
 LICENSE text eol=lf
 *.md text eol=lf
+*/build.sh text eol=lf
+*/cmd/* text eol=lf
+*/wizard/* text eol=lf
+*/manifest text eol=lf

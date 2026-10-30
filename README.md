@@ -1,91 +1,52 @@
-# LUMO · fnOS package
+# LUMO · fnOS packages
 
 **English** | [简体中文](README.zh-CN.md)
 
-**LUMO** tunnel client for [fnOS](https://www.fnnas.com/) (the NAS system). Install it and open **LUMO** from the desktop.
+Installable [fnOS](https://www.fnnas.com/) (飞牛 NAS) application packages for the
+[LUMO](https://github.com/j353719624/lumo) tunnel. Two packages, one per role — pick by where the
+machine sits:
 
-> One tunnel, both ends lit. Bring your NAS, router, remote desktops and work machines onto the same
-> network — from outside it feels exactly like being on the LAN.
+| Directory | Package | Install on | What it does |
+|---|---|---|---|
+| [`client/`](client) | LUMO 客户端 | NAS / PC **behind NAT** | Publishes local services out through the tunnel |
+| [`server/`](server) | LUMO 服务端 | Machine **with a public IP** | Catches tunnels from clients, owns the public ports |
 
-<p align="center"><img src="docs/login.png" width="49%" alt="Sign in"> <img src="docs/console.png" width="49%" alt="Console"></p>
-
-## What this is
-
-A **client-only** application package: it carries local services out through a LUMO tunnel. The server runs
-separately on a host with a public IP.
-
-- **No public ports** — sealed tunnels and punch-through both require a secret key, so nothing is exposed
-- **Four ways in** — port mapping (TCP / UDP), HTTP / HTTPS reverse proxy by domain, sealed tunnels, punch-through
-- **Own protocol** — length-framed JSON with Ed25519 signatures; the server stores only the public key
-- **Works right after install** — the connection is created from the installer wizard, no second setup
-- **Always online** — starts on boot, crashed processes are restarted by a watchdog
+Each directory is a complete, self-contained fnpack source tree (manifest, lifecycle scripts,
+install wizard, desktop entry). Download ready-made `.fpk` files from
+[Releases](../../releases) — the tag name says which package it belongs to
+(`v0.1.0` = client, `server-v0.1.0` = server).
 
 ## Install
 
-1. Download `lumo-<version>-x86.fpk` from [Releases](../../releases)
-2. fnOS App Center → Manual install → add from NAS (or upload the file)
-3. Fill in the wizard:
-   - server address, server port, KCP port (`0` = TCP only)
-   - tunnel secret (provided by the server)
-   - console account and password
-4. Open **LUMO** from the desktop and sign in with that account
+fnOS App Center → Manual install → upload the `.fpk`, then fill in the wizard:
 
-The console listens on a unix socket (used by the fnOS desktop gateway) and on TCP `7505` (LAN access).
+- **client**: server address, server port, KCP port, tunnel secret, console account/password —
+  the connection is created from the wizard, works right after install
+- **server**: service port, KCP port, HTTP port, console account/password — the tunnel secret is
+  generated at install time and waits in the app data folder as `tunnel-secret.txt`
 
-## Build
+## Build from source
 
-Requires Go 1.26+ and `fnpack` (built into fnOS, or see the
-[fnOS developer docs](https://developer.fnnas.com/)).
+Each package builds the same way; run inside `client/` or `server/`:
 
 ```bash
-# compile a linux/amd64 client and pack it
-LUMOC_BIN=/path/to/lumoc-linux ./build.sh
-# output: lumo.fpk
+# the Go sources live in the main repo, cloned next to this one:
+#   git clone https://github.com/j353719624/lumo ../lumo
+./build.sh                      # builds linux/amd64 binaries itself
+# or point at prebuilt binaries and skip compiling:
+LUMOS_BIN=/path/to/lumos LUMOC_BIN=/path/to/lumoc LUMO_SRC=/path/to/lumo ./build.sh
+# output: <client|server>.fpk
 ```
 
-`LUMOC_BIN` is optional (the script will call `go build`); it can point at any prebuilt linux/amd64 `lumoc`.
+Requires Go 1.26+ and `fnpack` (built into fnOS). See each package's README for the full
+wizards, runtime layout and scripts.
 
-## Layout
+## Gotcha (both packages)
 
-```text
-├── manifest             # app metadata (name, version, description, desktop entry)
-├── cmd/                 # lifecycle scripts
-│   ├── main             #   start / stop / status / watchdog
-│   ├── install_init     #   before install (stop the old instance)
-│   ├── install_callback #   after install (console credentials, connection from wizard)
-│   ├── config_init      #   settings page read
-│   ├── config_callback  #   settings page save
-│   ├── uninstall_*      #   before/after uninstall (reap processes, optional data wipe)
-│   └── upgrade_*        #   before/after upgrade
-├── config/              # privilege declaration and shared data
-├── wizard/              # install / uninstall forms
-├── app/
-│   ├── bin/lumoc        # build output, not tracked
-│   └── ui/              # desktop entry (gatewaySocket) and icons
-├── ICON.PNG / ICON_256.PNG
-└── build.sh
-```
-
-## Runtime layout
-
-| Item | Location |
-|---|---|
-| Connection config | `<app data>/lumo-configs.json` |
-| Console credentials | `<app data>/console.env` |
-| Logs | `<app data>/info.log`, `lumoc.log`, `watchdog.log` |
-| Desktop entry socket | `<install dir>/app.sock` |
-
-Two process layers: `lumoc ui` owns the console and connection management, and each connection gets a
-`lumoc engine` child. The main process calls `setsid` so it leads its own process group; stopping the group
-takes the children with it, and uninstall sweeps by path as a safety net so no orphan is left behind.
-
-## Gotcha
-
-fnOS does **not** pass `password` wizard fields to install scripts as environment variables, so any field a
-script reads must be declared as `text`.
+fnOS does **not** pass `password` wizard fields to install scripts as environment variables, so any
+field a script reads must be declared as `text`.
 
 ## License
 
 **PolyForm Noncommercial License 1.0.0** — free to use, modify and share, **commercial use requires the
-author's permission**. See [LICENSING.md](LICENSING.md) for what is allowed and how to obtain a commercial
-license; the full text is in [LICENSE](LICENSE).
+author's permission**. See [LICENSING.md](LICENSING.md); the full text is in [LICENSE](LICENSE).
