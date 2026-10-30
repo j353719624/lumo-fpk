@@ -1,88 +1,89 @@
-# LUMO · fnOS 应用包
+# LUMO · fnOS package
 
-飞牛 fnOS（NAS 系统）上的 **LUMO 内网穿透客户端**安装包工程。装完在飞牛桌面点「LUMO」即可用。
+**LUMO** tunnel client for [fnOS](https://www.fnnas.com/) (the NAS system). Install it and open **LUMO** from the desktop.
 
-> LUMO（隧光）—— 一条隧道，两端点亮。把 NAS、路由器、远程桌面、公司电脑接进同一张网，
-> 在外访问和在局域网里没有区别。
+> One tunnel, both ends lit. Bring your NAS, router, remote desktops and work machines onto the same
+> network — from outside it feels exactly like being on the LAN.
 
-## 这是什么
+<p align="center"><img src="docs/login.png" width="49%" alt="Sign in"> <img src="docs/console.png" width="49%" alt="Console"></p>
 
-这是一份**纯客户端**应用包：把本机服务通过 LUMO 隧道送到公网，服务端另行部署在有公网 IP 的机器上。
+## What this is
 
-- 不占公网端口：密钥隧道与打洞直连都凭密钥接入，公网上没有入口
-- 四种接入：端口映射（TCP / UDP）、HTTP / HTTPS 反代、密钥隧道、打洞直连
-- 协议自研：长度分帧 JSON + Ed25519 签名认证，服务端磁盘只存公钥
-- 装完即用：向导里填好服务端信息，连接会自动出现在控制台
-- 一直在线：随开机自启，进程异常退出自动拉起
+A **client-only** application package: it carries local services out through a LUMO tunnel. The server runs
+separately on a host with a public IP.
 
-## 安装
+- **No public ports** — sealed tunnels and punch-through both require a secret key, so nothing is exposed
+- **Four ways in** — port mapping (TCP / UDP), HTTP / HTTPS reverse proxy by domain, sealed tunnels, punch-through
+- **Own protocol** — length-framed JSON with Ed25519 signatures; the server stores only the public key
+- **Works right after install** — the connection is created from the installer wizard, no second setup
+- **Always online** — starts on boot, crashed processes are restarted by a watchdog
 
-1. 从 [Releases](../../releases) 下载 `lumo-<版本>-x86.fpk`
-2. 飞牛应用中心 → 手动安装 → 从 NAS 添加（或上传）
-3. 向导填写：
-   - 服务端地址、服务端端口、KCP 端口（填 0 只用 TCP）
-   - 隧道密钥（由服务端提供）
-   - 控制台登录账号与密码
-4. 装完从桌面点「LUMO」，用上面设的账号密码登录
+## Install
 
-控制台同时监听 unix socket（供飞牛桌面网关）与 TCP `7505`（局域网直连）。
+1. Download `lumo-<version>-x86.fpk` from [Releases](../../releases)
+2. fnOS App Center → Manual install → add from NAS (or upload the file)
+3. Fill in the wizard:
+   - server address, server port, KCP port (`0` = TCP only)
+   - tunnel secret (provided by the server)
+   - console account and password
+4. Open **LUMO** from the desktop and sign in with that account
 
-## 构建
+The console listens on a unix socket (used by the fnOS desktop gateway) and on TCP `7505` (LAN access).
 
-需要 Go 1.26+ 与 `fnpack`（飞牛系统自带，或见 [fnOS 开发者文档](https://developer.fnnas.com/)）。
+## Build
+
+Requires Go 1.26+ and `fnpack` (built into fnOS, or see the
+[fnOS developer docs](https://developer.fnnas.com/)).
 
 ```bash
-# 编译 linux/amd64 客户端并打包
-LUMOC_BIN=../lumo-clean/bin/lumoc-linux ./build.sh
-# 产出：lumo.fpk
+# compile a linux/amd64 client and pack it
+LUMOC_BIN=/path/to/lumoc-linux ./build.sh
+# output: lumo.fpk
 ```
 
-`LUMOC_BIN` 可省略（会调用本机 `go build`），也可指向任意预编译好的 linux/amd64 `lumoc`。
+`LUMOC_BIN` is optional (the script will call `go build`); it can point at any prebuilt linux/amd64 `lumoc`.
 
-## 目录结构
+## Layout
 
 ```text
-├── manifest             # 应用元数据（appname / version / 描述 / 入口）
-├── cmd/                 # 生命周期脚本
-│   ├── main             #   启动、停止、状态、watchdog 守护
-│   ├── install_init     #   安装前（停旧实例）
-│   ├── install_callback #   安装后（写控制台凭据、按向导值生成连接）
-│   ├── config_init      #   设置页读取
-│   ├── config_callback  #   设置页保存
-│   ├── uninstall_*      #   卸载前后（收进程，可选清数据）
-│   └── upgrade_*        #   升级前后
-├── config/              # 权限声明与数据共享
-├── wizard/              # 安装 / 卸载向导表单
+├── manifest             # app metadata (name, version, description, desktop entry)
+├── cmd/                 # lifecycle scripts
+│   ├── main             #   start / stop / status / watchdog
+│   ├── install_init     #   before install (stop the old instance)
+│   ├── install_callback #   after install (console credentials, connection from wizard)
+│   ├── config_init      #   settings page read
+│   ├── config_callback  #   settings page save
+│   ├── uninstall_*      #   before/after uninstall (reap processes, optional data wipe)
+│   └── upgrade_*        #   before/after upgrade
+├── config/              # privilege declaration and shared data
+├── wizard/              # install / uninstall forms
 ├── app/
-│   ├── bin/lumoc        # 构建产物，不入库
-│   └── ui/              # 桌面入口（gatewaySocket）与图标
+│   ├── bin/lumoc        # build output, not tracked
+│   └── ui/              # desktop entry (gatewaySocket) and icons
 ├── ICON.PNG / ICON_256.PNG
 └── build.sh
 ```
 
-## 运行时约定
+## Runtime layout
 
-| 项目 | 位置 |
+| Item | Location |
 |---|---|
-| 连接配置 | `<应用数据>/lumo-configs.json` |
-| 控制台凭据 | `<应用数据>/console.env` |
-| 运行日志 | `<应用数据>/info.log`、`lumoc.log`、`watchdog.log` |
-| 桌面入口 socket | `<应用安装目录>/app.sock` |
+| Connection config | `<app data>/lumo-configs.json` |
+| Console credentials | `<app data>/console.env` |
+| Logs | `<app data>/info.log`, `lumoc.log`, `watchdog.log` |
+| Desktop entry socket | `<install dir>/app.sock` |
 
-进程分两层：`lumoc ui` 主进程负责控制台与连接管理，每条连接一个 `lumoc engine` 子进程。
-主进程以 `setsid` 自成进程组，停止时整组回收；卸载时再按路径扫一遍兜底，不留孤儿。
+Two process layers: `lumoc ui` owns the console and connection management, and each connection gets a
+`lumoc engine` child. The main process calls `setsid` so it leads its own process group; stopping the group
+takes the children with it, and uninstall sweeps by path as a safety net so no orphan is left behind.
 
-## 注意
+## Gotcha
 
-飞牛的 `password` 类型向导字段**不会**作为环境变量传给安装脚本，因此需要参与配置的字段一律用 `text` 类型。
+fnOS does **not** pass `password` wizard fields to install scripts as environment variables, so any field a
+script reads must be declared as `text`.
 
-## 协议
+## License
 
-应用元数据为 fnOS 约定的 TOML（`manifest`）；生命周期脚本为 bash，须可执行。
-打包使用 `fnpack build`，不要手工打 tar。
-
-## 许可
-
-**PolyForm Noncommercial License 1.0.0** —— 可自由使用、修改、分发，**商业使用需作者授权**。
-
-商用授权说明见 [LICENSING.md](LICENSING.md)，许可全文见 [LICENSE](LICENSE)。
+**PolyForm Noncommercial License 1.0.0** — free to use, modify and share, **commercial use requires the
+author's permission**. See [LICENSING.md](LICENSING.md) for what is allowed and how to obtain a commercial
+license; the full text is in [LICENSE](LICENSE).
