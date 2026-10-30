@@ -1,5 +1,7 @@
 # LUMO · fnOS package
 
+**English** | [简体中文](README.zh-CN.md)
+
 **LUMO** tunnel client for [fnOS](https://www.fnnas.com/) (the NAS system). Install it and open **LUMO** from the desktop.
 
 > One tunnel, both ends lit. Bring your NAS, router, remote desktops and work machines onto the same
