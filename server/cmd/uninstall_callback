@@ -13,8 +13,12 @@ fi
 
 if [ -n "${APPDEST}" ]; then
     pkill -f "${APPDEST}/bin/lumos" 2>/dev/null || true
+    # watchdog 的 cmdline 是 "bash <路径>/cmd/main watchdog"，binary 模式
+    # 匹配不到；数据删除后 pid 文件也没了，必须按应用名清脚本进程
+    pkill -f "$(basename "${APPDEST}")/cmd/main" 2>/dev/null || true
     sleep 1
     pkill -9 -f "${APPDEST}/bin/lumos" 2>/dev/null || true
+    pkill -9 -f "$(basename "${APPDEST}")/cmd/main" 2>/dev/null || true
 fi
 
 rm -f "${PKGVAR}/"*.pid "${PKGVAR}/"*.pgid 2>/dev/null || true

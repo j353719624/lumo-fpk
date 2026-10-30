@@ -49,6 +49,11 @@ start_lumoc() {
     if check_process "${pid}"; then
         return 0
     fi
+    # 双实例保险：pid 文件丢失（数据被清/手工清理）时，不再拉起第二份 ui
+    if pgrep -f "${LUMOC} ui" > /dev/null 2>&1; then
+        log_msg "已有 lumoc ui 在运行，跳过启动"
+        return 0
+    fi
     log_msg "启动 lumoc ..."
     setsid bash -c "$(client_cmd)" >> "${LOG_DIR}/lumoc.log" 2>&1 &
     pid=$!
@@ -109,6 +114,9 @@ stop_watchdog() {
 watchdog_loop() {
     while true; do
         sleep 10
+        # 应用被卸载（程序文件没了）后没有可守护的东西：退出，
+        # 否则会每 10 秒循环拉起/报错，卸载后仍然留着一个 bash
+        [ -x "${LUMOC}" ] || { log_msg "程序已移除，watchdog 退出"; exit 0; }
         pid=""
         [ -r "${PID_FILE}" ] && pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
         if ! check_process "${pid}"; then

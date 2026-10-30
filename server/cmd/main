@@ -38,6 +38,11 @@ start_lumos() {
         log_msg "缺少配置 ${CONF}，请重新安装"
         return 1
     fi
+    # 双实例保险：pid 文件丢失时，不再拉起第二份 lumos
+    if pgrep -f "${LUMOS} -c=" > /dev/null 2>&1; then
+        log_msg "已有 lumos 在运行，跳过启动"
+        return 0
+    fi
     log_msg "启动 lumos ..."
     # 等号形式传参，避免空值吞掉后面的参数
     setsid "${LUMOS}" -c="${CONF}" --web-base="${BASE}" --web-socket="${APP_SOCKET}" \
@@ -100,6 +105,10 @@ stop_watchdog() {
 watchdog_loop() {
     while true; do
         sleep 10
+        # 应用被卸载（程序或配置没了）后没有可守护的东西：退出，
+        # 否则会每 10 秒循环拉起/报错，卸载后仍然留着一个 bash
+        [ -x "${LUMOS}" ] || { log_msg "程序已移除，watchdog 退出"; exit 0; }
+        [ -r "${CONF}" ] || { log_msg "配置已移除，watchdog 退出"; exit 0; }
         pid=""
         [ -r "${PID_FILE}" ] && pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
         if ! check_process "${pid}"; then
