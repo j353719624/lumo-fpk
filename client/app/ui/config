@@ -1,7 +1,7 @@
 {
   ".url": {
     "lumo.Application": {
-      "title": "LUMO",
+      "title": "LUMO 客户端",
       "desc": "LUMO 内网穿透控制台",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
