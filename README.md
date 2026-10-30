@@ -80,3 +80,9 @@ LUMOC_BIN=../lumo-clean/bin/lumoc-linux ./build.sh
 
 应用元数据为 fnOS 约定的 TOML（`manifest`）；生命周期脚本为 bash，须可执行。
 打包使用 `fnpack build`，不要手工打 tar。
+
+## 许可
+
+**PolyForm Noncommercial License 1.0.0** —— 可自由使用、修改、分发，**商业使用需作者授权**。
+
+商用授权说明见 [LICENSING.md](LICENSING.md)，许可全文见 [LICENSE](LICENSE)。
