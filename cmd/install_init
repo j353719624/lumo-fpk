@@ -1,0 +1,33 @@
+#!/bin/bash
+# 安装前准备：
+#  1) 停掉旧的容器部署 —— 两套客户端用同一份配置会向服务端重复注册（服务端按名称唯一），
+#     重名的那一条会被直接拒绝，表现为隧道时通时不通；
+#  2) 把旧容器的连接配置迁移过来，装完即用，不用重新填一遍。
+
+set -u
+
+LEGACY_CONTAINER="lumo-client-ui"
+LEGACY_STORE="/vol2/docker/lumo/ui-data/lumo-configs.json"
+PKGVAR="${TRIM_PKGVAR:-}"
+TARGET_STORE="${PKGVAR}/lumo-configs.json"
+
+note() {
+    printf '%s\n' "$1" >&2
+}
+
+if command -v docker >/dev/null 2>&1; then
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${LEGACY_CONTAINER}"; then
+        note "停止旧容器 ${LEGACY_CONTAINER}（连接配置会迁移到本应用）"
+        docker stop "${LEGACY_CONTAINER}" >/dev/null 2>&1 \
+            || sudo -n docker stop "${LEGACY_CONTAINER}" >/dev/null 2>&1 || true
+    fi
+fi
+
+if [ -n "${TARGET_STORE}" ] && [ ! -f "${TARGET_STORE}" ] && [ -f "${LEGACY_STORE}" ]; then
+    mkdir -p "${PKGVAR}" 2>/dev/null || true
+    if cp "${LEGACY_STORE}" "${TARGET_STORE}" 2>/dev/null; then
+        note "已迁移原有连接配置"
+    fi
+fi
+
+exit 0

@@ -1,0 +1,19 @@
+[
+  {
+    "stepTitle": "卸载 LUMO",
+    "items": [
+      { "type": "tips", "field": "tips_uninstall", "label": "说明", "rules": [], "initValue": "", "options": [], "helpText": "卸载会停止所有隧道。默认保留已有配置，重装后自动恢复。" },
+      {
+        "type": "radio",
+        "field": "wizard_delete_data",
+        "label": "是否删除配置数据",
+        "rules": [],
+        "initValue": "false",
+        "options": [
+          { "label": "保留现有配置（推荐）", "value": "false" },
+          { "label": "清除全部数据（不可恢复）", "value": "true" }
+        ]
+      }
+    ]
+  }
+]

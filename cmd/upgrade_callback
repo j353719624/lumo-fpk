@@ -1,0 +1,13 @@
+#!/bin/bash
+# 升级后：确认程序文件可用并提示服务已可重新拉起。
+
+set -u
+
+APPDEST="${TRIM_APPDEST:-}"
+
+if [ -n "${APPDEST}" ] && [ ! -x "${APPDEST}/bin/lumoc" ]; then
+    printf '%s\n' "LUMO 升级失败：缺少可执行文件 ${APPDEST}/bin/lumoc" >&2
+    exit 1
+fi
+
+exit 0

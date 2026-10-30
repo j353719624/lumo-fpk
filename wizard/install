@@ -1,0 +1,19 @@
+[
+  {
+    "stepTitle": "连接服务端",
+    "items": [
+      { "type": "text", "field": "serverAddr", "label": "服务端地址（IP 或域名）", "rules": [], "initValue": "", "options": [] },
+      { "type": "text", "field": "serverPort", "label": "服务端端口", "rules": [], "initValue": "58619", "options": [] },
+      { "type": "text", "field": "kcpPort", "label": "KCP 端口（填 0 表示只用 TCP）", "rules": [], "initValue": "47011", "options": [] },
+      { "type": "text", "field": "secret", "label": "隧道密钥（服务端提供）", "rules": [], "initValue": "", "options": [] }
+    ]
+  },
+  {
+    "stepTitle": "控制台登录",
+    "items": [
+      { "type": "text", "field": "consoleUser", "label": "登录账号", "rules": [], "initValue": "admin", "options": [] },
+      { "type": "text", "field": "consolePass", "label": "登录密码（留空自动生成，安装完成后在应用日志里查看）", "rules": [], "initValue": "", "options": [] },
+      { "type": "tips", "field": "tips1", "label": "说明", "rules": [], "initValue": "", "options": [], "helpText": "填完即可使用：安装完成后从飞牛桌面点「LUMO」，用上面设的账号密码登录，隧道连接已在里面配好。" }
+    ]
+  }
+]

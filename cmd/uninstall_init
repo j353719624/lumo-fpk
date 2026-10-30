@@ -1,0 +1,17 @@
+#!/bin/bash
+# 卸载前：停止服务。配置保留，重装后自动恢复。
+
+set -u
+
+APPDEST="${TRIM_APPDEST:-}"
+MAIN="${APPDEST}/cmd/main"
+
+if [ -x "${MAIN}" ]; then
+    "${MAIN}" stop >/dev/null 2>&1 || true
+fi
+
+if [ -n "${APPDEST}" ]; then
+    pkill -f "${APPDEST}/bin/lumoc" 2>/dev/null || true
+fi
+
+exit 0

@@ -1,0 +1,25 @@
+#!/bin/bash
+# 设置页读取：展示当前生效的连接参数。
+
+set -u
+
+PKGVAR="${TRIM_PKGVAR:-}"
+STORE="${PKGVAR}/lumo-configs.json"
+CONF="${PKGVAR}/console.env"
+
+if [ -r "${CONF}" ]; then
+    . "${CONF}"
+    printf 'ADDR=%s\n' "${ADDR}"
+    printf 'CONSOLE_USER=%s\n' "${CONSOLE_USER}"
+fi
+
+# 首个连接的服务端信息，方便在设置页里核对
+if [ -r "${STORE}" ]; then
+    one=$(tr -d '\n' < "${STORE}")
+    addr=$(printf '%s' "${one}" | sed -n 's/.*"serverAddr":"\([^"]*\)".*/\1/p')
+    port=$(printf '%s' "${one}" | sed -n 's/.*"serverPort":\([0-9]*\).*/\1/p')
+    [ -n "${addr}" ] && printf 'serverAddr=%s\n' "${addr}"
+    [ -n "${port}" ] && printf 'serverPort=%s\n' "${port}"
+fi
+
+exit 0

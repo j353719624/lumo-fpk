@@ -1,0 +1,90 @@
+#!/bin/bash
+# 安装后处理（纯客户端）：
+#   1) 用向导里填的服务端地址/端口/密钥直接生成连接配置 —— 装完即可连上；
+#   2) 生成控制台登录账号密码（本地凭据，向导填了就用填的）。
+#
+# 注意：飞牛的 password 类型字段不会作为环境变量传给安装脚本，
+# 所以向导里凡是需要参与配置的字段一律用 text 类型。
+
+set -u
+
+APPDEST="${TRIM_APPDEST:-}"
+PKGVAR="${TRIM_PKGVAR:-}"
+LUMOC="${APPDEST}/bin/lumoc"
+CONF="${PKGVAR}/console.env"
+STORE="${PKGVAR}/lumo-configs.json"
+LEGACY_STORE="/vol2/docker/lumo/ui-data/lumo-configs.json"
+
+fail() {
+    if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+        printf '%s\n' "$1" >>"${TRIM_TEMP_LOGFILE}"
+    fi
+    printf '%s\n' "$1" >&2
+    exit 1
+}
+
+say() {
+    if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+        printf '%s\n' "$1" >>"${TRIM_TEMP_LOGFILE}"
+    fi
+    printf '%s\n' "$1" >&2
+}
+
+[ -n "${PKGVAR}" ] || fail "LUMO 安装失败：缺少 TRIM_PKGVAR"
+[ -x "${LUMOC}" ] || fail "LUMO 安装失败：缺少客户端程序 ${LUMOC}"
+
+mkdir -p "${PKGVAR}" || fail "LUMO 安装失败：无法创建数据目录 ${PKGVAR}"
+
+SERVER_ADDR="${serverAddr:-}"
+SERVER_PORT="${serverPort:-58619}"
+KCP_PORT="${kcpPort:-0}"
+SECRET="${secret:-}"
+CUSER="${consoleUser:-admin}"
+CPASS="${consolePass:-}"
+
+# 控制台凭据
+if [ ! -f "${CONF}" ]; then
+    if [ -z "${CPASS}" ]; then
+        CPASS="$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 16)"
+        [ -n "${CPASS}" ] || CPASS="lumo$(date +%s)"
+        say "控制台账号：${CUSER}"
+        say "控制台密码：${CPASS}"
+    else
+        say "控制台账号：${CUSER}（密码为你安装时设置的）"
+    fi
+    cat > "${CONF}" <<ENVEOF
+ADDR="0.0.0.0:7505"
+CONSOLE_USER="${CUSER}"
+CONSOLE_PASS="${CPASS}"
+ENVEOF
+    chmod 600 "${CONF}"
+fi
+
+# 连接配置：直接用向导参数生成
+if [ ! -f "${STORE}" ]; then
+    if [ -n "${SERVER_ADDR}" ] && [ -n "${SECRET}" ]; then
+        if [ "${KCP_PORT}" -gt 0 ] 2>/dev/null; then
+            "${LUMOC}" init --store "${STORE}" \
+                --server "${SERVER_ADDR}" --port "${SERVER_PORT}" --token "${SECRET}" \
+                --protocol kcp --kcp-port "${KCP_PORT}" >/dev/null 2>&1 \
+                && say "已创建连接：${SERVER_ADDR}:${SERVER_PORT}（KCP ${KCP_PORT}）" \
+                || say "创建连接失败，请在控制台里手动添加"
+        else
+            "${LUMOC}" init --store "${STORE}" \
+                --server "${SERVER_ADDR}" --port "${SERVER_PORT}" --token "${SECRET}" >/dev/null 2>&1 \
+                && say "已创建连接：${SERVER_ADDR}:${SERVER_PORT}（TCP）" \
+                || say "创建连接失败，请在控制台里手动添加"
+        fi
+    elif [ -f "${LEGACY_STORE}" ]; then
+        cp "${LEGACY_STORE}" "${STORE}" 2>/dev/null && say "已迁移原有连接配置"
+    else
+        printf '[]\n' > "${STORE}"
+        say "未填写服务端地址或密钥，请打开控制台添加连接"
+    fi
+fi
+chmod 600 "${STORE}" 2>/dev/null || true
+
+say "LUMO 客户端安装完成"
+say "入口：飞牛桌面 → LUMO"
+
+exit 0

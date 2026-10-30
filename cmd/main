@@ -1,0 +1,142 @@
+#!/bin/bash
+# LUMO 客户端（fnOS）：常驻服务，托管各条隧道。
+#
+# 进程：lumoc 主进程 + 每条连接一个 engine 子进程。
+# 进程组：主进程用 setsid 自成进程组，停止时按组杀，子进程一起收掉。
+# 守护：watchdog 子命令每 10 秒检查一次，进程崩了自动拉起；
+#       配合飞牛的应用开机自启，做到一直在线。
+
+LOG_DIR="${TRIM_PKGVAR}"
+CONF="${TRIM_PKGVAR}/app.env"
+BIN_DIR="${TRIM_APPDEST}/bin"
+LUMOC="${BIN_DIR}/lumoc"
+# 飞牛桌面网关按 gatewaySocket 找这个 socket（与 app/ui/config 一致）
+APP_SOCKET="${TRIM_APPDEST}/app.sock"
+
+CONSOLE_ADDR="0.0.0.0:7505"
+CONSOLE_USER="admin"
+CONSOLE_PASS=""
+BASE="/app/lumo"
+
+[ -r "${CONF}" ] && . "${CONF}"
+# 控制台凭据单独存放；不读它会导致空密码启动（鉴权直接放行）
+if [ -r "${LOG_DIR}/console.env" ]; then
+    . "${LOG_DIR}/console.env"
+    [ -n "${ADDR:-}" ] && CONSOLE_ADDR="${ADDR}"
+fi
+
+log_msg() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_DIR}/info.log"
+}
+
+PID_FILE="${LOG_DIR}/lumoc.pid"
+PGID_FILE="${LOG_DIR}/lumoc.pgid"
+WATCH_PID="${LOG_DIR}/watchdog.pid"
+
+check_process() {
+    [ -n "$1" ] && ps -p "$1" > /dev/null 2>&1
+}
+
+client_cmd() {
+    # 等号形式传参：密码为空时 "--pass --base" 会被 flag 解析成 pass=--base，
+    # 后面的 --store 直接丢失。
+    echo "${LUMOC} ui --addr=${CONSOLE_ADDR} --socket=${APP_SOCKET} --user=${CONSOLE_USER} --pass=${CONSOLE_PASS} --base=${BASE} --store=${LOG_DIR}/lumo-configs.json"
+}
+
+start_lumoc() {
+    pid=""
+    [ -r "${PID_FILE}" ] && pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+    if check_process "${pid}"; then
+        return 0
+    fi
+    log_msg "启动 lumoc ..."
+    setsid bash -c "$(client_cmd)" >> "${LOG_DIR}/lumoc.log" 2>&1 &
+    pid=$!
+    printf "%s" "${pid}" > "${PID_FILE}"
+    printf "%s" "${pid}" > "${PGID_FILE}"
+    log_msg "lumoc pid=${pid}"
+}
+
+stop_lumoc() {
+    pid=""
+    [ -r "${PID_FILE}" ] && pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+    pgid=""
+    [ -r "${PGID_FILE}" ] && pgid=$(head -n 1 "${PGID_FILE}" | tr -d '[:space:]')
+    [ -z "${pgid}" ] && [ -n "${pid}" ] && pgid="${pid}"
+
+    if [ -n "${pgid}" ] && check_process "${pgid}"; then
+        log_msg "停止 lumoc pgid=${pgid}"
+        kill -TERM "-${pgid}" 2>/dev/null
+        for _ in $(seq 1 15); do
+            check_process "${pgid}" || break
+            sleep 1
+        done
+        check_process "${pgid}" && kill -KILL "-${pgid}" 2>/dev/null
+        sleep 1
+    fi
+
+    # 兜底：进程组杀仍有残留时（旧版本留下的孤儿 engine）按路径清理
+    pkill -f "${LUMOC}" 2>/dev/null
+    sleep 1
+    pkill -9 -f "${LUMOC}" 2>/dev/null
+
+    rm -f "${PID_FILE}" "${PGID_FILE}"
+}
+
+start_watchdog() {
+    wpid=""
+    [ -r "${WATCH_PID}" ] && wpid=$(head -n 1 "${WATCH_PID}" | tr -d '[:space:]')
+    if check_process "${wpid}"; then
+        return 0
+    fi
+    setsid bash "$0" watchdog >> "${LOG_DIR}/watchdog.log" 2>&1 &
+    printf "%s" "$!" > "${WATCH_PID}"
+    log_msg "watchdog pid=$!"
+}
+
+stop_watchdog() {
+    wpid=""
+    [ -r "${WATCH_PID}" ] && wpid=$(head -n 1 "${WATCH_PID}" | tr -d '[:space:]')
+    if check_process "${wpid}"; then
+        log_msg "停止 watchdog pid=${wpid}"
+        kill -TERM "${wpid}" 2>/dev/null
+        sleep 1
+        check_process "${wpid}" && kill -KILL "${wpid}" 2>/dev/null
+    fi
+    rm -f "${WATCH_PID}"
+}
+
+watchdog_loop() {
+    while true; do
+        sleep 10
+        pid=""
+        [ -r "${PID_FILE}" ] && pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+        if ! check_process "${pid}"; then
+            log_msg "watchdog: lumoc 不在，重新拉起"
+            start_lumoc
+        fi
+    done
+}
+
+case $1 in
+start)
+    start_lumoc
+    start_watchdog
+    ;;
+watchdog)
+    watchdog_loop
+    ;;
+stop)
+    stop_watchdog
+    stop_lumoc
+    rm -f "${APP_SOCKET}"
+    ;;
+status)
+    pid=""
+    [ -r "${PID_FILE}" ] && pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+    if check_process "${pid}"; then exit 0; else exit 3; fi
+    ;;
+*)
+    exit 1
+    ;;
+esac
