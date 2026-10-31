@@ -21,7 +21,9 @@ if [ -n "${APPDEST}" ]; then
     pkill -9 -f "$(basename "${APPDEST}")/cmd/main" 2>/dev/null || true
 fi
 
-rm -f "${PKGVAR}/console.env" "${PKGVAR}/"*.pid "${PKGVAR}/"*.pgid 2>/dev/null || true
+# console.env 属于「保留配置」的一部分：留着它，重装后控制台密码不变。
+# 只有向导选了「清除全部数据」时才随整个数据目录一起删除。
+rm -f "${PKGVAR}/"*.pid "${PKGVAR}/"*.pgid 2>/dev/null || true
 
 if [ "${wizard_delete_data:-false}" = "true" ]; then
     rm -rf "${PKGVAR}" 2>/dev/null || true
