@@ -42,11 +42,19 @@ KCP_PORT="${kcpPort:-47011}"
 VHOST_PORT="${vhostHTTPPort:-18080}"
 CUSER="${webUser:-admin}"
 CPASS="${webPass:-}"
+# 三层防护最外层凭证（HTTP Basic Auth，独立于面板密码）
+BUSER="${basicUser:-lumo}"
+BPASS="${basicPass:-}"
 
 # 首次安装：生成服务端配置与隧道密钥
 if [ ! -f "${TOML}" ]; then
+    if [ -z "${BPASS}" ]; then
+        BPASS="$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20)"
+        [ -n "${BPASS}" ] || BPASS="lumo$(date +%s)"
+    fi
     ARGS=(server --out "${TOML}" --bind-port "${BIND_PORT}" --kcp-port "${KCP_PORT}" \
-        --vhost-port "${VHOST_PORT}" --web-user "${CUSER}")
+        --vhost-port "${VHOST_PORT}" --web-user "${CUSER}" \
+        --web-basic-user "${BUSER}" --web-basic-pass "${BPASS}")
     [ -n "${CPASS}" ] && ARGS+=(--web-pass "${CPASS}")
     OUT="$("${LUMOC}" "${ARGS[@]}")" || fail "LUMO 服务端安装失败：生成配置出错"
     SECRET=$(printf '%s\n' "${OUT}" | sed -n 's/^SECRET=//p')
@@ -56,6 +64,7 @@ if [ ! -f "${TOML}" ]; then
         printf '%s' "${SECRET}" > "${SECRET_FILE}"
         chmod 600 "${SECRET_FILE}"
         say "隧道密钥已生成，保存在数据目录 tunnel-secret.txt（客户端连接时使用，请妥善保管）"
+        say "Basic 认证账号：${BUSER}（密码见应用日志）"
     fi
     if [ -z "${CPASS}" ] && [ -n "${WEBPASS}" ]; then
         say "控制台账号：${CUSER}"

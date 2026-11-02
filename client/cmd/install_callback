@@ -41,6 +41,9 @@ KCP_PORT="${kcpPort:-0}"
 SECRET="${secret:-}"
 CUSER="${consoleUser:-admin}"
 CPASS="${consolePass:-}"
+# 三层防护最外层凭证（HTTP Basic Auth，独立于面板密码）
+BUSER="${basicUser:-}"
+BPASS="${basicPass:-}"
 
 # 控制台凭据
 if [ ! -f "${CONF}" ]; then
@@ -52,12 +55,19 @@ if [ ! -f "${CONF}" ]; then
     else
         say "控制台账号：${CUSER}（密码为你安装时设置的）"
     fi
+    if [ -z "${BPASS}" ]; then
+        BPASS="$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20)"
+        [ -n "${BPASS}" ] || BPASS="lumo$(date +%s)"
+    fi
     cat > "${CONF}" <<ENVEOF
 ADDR="0.0.0.0:7505"
 CONSOLE_USER="${CUSER}"
 CONSOLE_PASS="${CPASS}"
+BASIC_USER="${BUSER:-lumo}"
+BASIC_PASS="${BPASS}"
 ENVEOF
     chmod 600 "${CONF}"
+    say "Basic 认证账号：${BUSER:-lumo}（密码见应用日志）"
 fi
 
 # 连接配置：直接用向导参数生成

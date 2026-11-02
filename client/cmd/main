@@ -16,6 +16,9 @@ APP_SOCKET="${TRIM_APPDEST}/app.sock"
 CONSOLE_ADDR="0.0.0.0:7505"
 CONSOLE_USER="admin"
 CONSOLE_PASS=""
+# 三层防护最外层：HTTP Basic Auth，独立于面板密码
+BASIC_USER=""
+BASIC_PASS=""
 BASE="/app/lumo"
 
 [ -r "${CONF}" ] && . "${CONF}"
@@ -48,7 +51,7 @@ check_process() {
 client_cmd() {
     # 等号形式传参：密码为空时 "--pass --base" 会被 flag 解析成 pass=--base，
     # 后面的 --store 直接丢失。
-    echo "${LUMOC} ui --addr=${CONSOLE_ADDR} --socket=${APP_SOCKET} --user=${CONSOLE_USER} --pass=${CONSOLE_PASS} --base=${BASE} --store=${LOG_DIR}/lumo-configs.json"
+    echo "${LUMOC} ui --addr=${CONSOLE_ADDR} --socket=${APP_SOCKET} --user=${CONSOLE_USER} --pass=${CONSOLE_PASS} --base=${BASE} --store=${LOG_DIR}/lumo-configs.json --basic-user=${BASIC_USER} --basic-pass=${BASIC_PASS}"
 }
 
 start_lumoc() {
