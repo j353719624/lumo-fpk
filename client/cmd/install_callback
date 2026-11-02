@@ -117,6 +117,13 @@ else
         chmod 600 "${CONF}"
         say "Basic 认证账号：${BUSER:-lumo}（密码为你安装时设置的）"
     fi
+    # 向导里明确填了控制台账号和密码：同样以向导为准（哈希后覆盖）
+    if [ -n "${consoleUser:-}" ] && [ -n "${consolePass:-}" ]; then
+        CPASS_HASH="$(hashpw "${consolePass}")"
+        sed -i "s|^CONSOLE_USER=.*|CONSOLE_USER=\"${consoleUser}\"|; s|^CONSOLE_PASS=.*|CONSOLE_PASS=\"${CPASS_HASH}\"|" "${CONF}"
+        chmod 600 "${CONF}"
+        say "控制台账号：${consoleUser}（密码为你安装时设置的）"
+    fi
 fi
 
 # 连接配置：直接用向导参数生成

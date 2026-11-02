@@ -122,6 +122,13 @@ else
         chmod 600 "${TOML}"
         say "Basic 认证账号：${BUSER}（密码为你安装时设置的）"
     fi
+    # 向导里明确填了控制台账号和密码：同样以向导为准（哈希后覆盖）
+    if [ -n "${webUser:-}" ] && [ -n "${webPass:-}" ]; then
+        CPASS_HASH="$(hashpw "${webPass}")"
+        sed -i "s|^user = .*|user = \"${webUser}\"|; s|^password = .*|password = \"${CPASS_HASH}\"|" "${TOML}"
+        chmod 600 "${TOML}"
+        say "控制台账号：${webUser}（密码为你安装时设置的）"
+    fi
 fi
 chmod 600 "${TOML}" 2>/dev/null || true
 
