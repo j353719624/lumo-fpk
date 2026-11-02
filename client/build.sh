@@ -1,5 +1,5 @@
 #!/bin/bash
-# 构建 fnOS FPK 安装包。产出：fpk/lumo.fpk
+# 构建 fnOS FPK 安装包。产出：lumo.fpk
 #
 # 前置条件（二选一）：
 #   - 在 fnOS 本机运行：fnpack 已内置，只需 Go 1.26+（或直接跳过编译，见 ENV）
@@ -7,7 +7,7 @@
 #
 # 环境变量：
 #   LUMOC_BIN   预编译好的 linux/amd64 lumoc 路径；设置后跳过本地编译
-#               （例如交叉编译机上传的二进制）
+#   LUMO_SRC    Go 源码目录（主仓 lumo），默认 ../lumo
 set -e
 cd "$(dirname "$0")"
 
@@ -18,8 +18,9 @@ LUMO_SRC="${LUMO_SRC:-../lumo}"
 if [ -n "${LUMOC_BIN}" ]; then
     cp "${LUMOC_BIN}" app/bin/lumoc
 else
-    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-        go build -trimpath -ldflags "-s -w" -o app/bin/lumoc ../../cmd/lumoc
+    # go build 的包路径必须在模块内：先进源码目录再编译，输出回当前目录
+    (cd "${LUMO_SRC}" && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+        go build -trimpath -ldflags "-s -w" -o "$OLDPWD/app/bin/lumoc" ./cmd/lumoc)
 fi
 chmod 755 app/bin/lumoc
 

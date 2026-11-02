@@ -7,7 +7,8 @@
 #
 # 环境变量：
 #   LUMOS_BIN   预编译好的 linux/amd64 lumos 路径；设置后跳过本地编译
-#   LUMOC_BIN   预编译好的 linux/amd64 lumoc 路径（安装时用它生成服务端配置）
+#   LUMOC_BIN   预编译好的 linux/amd64 lumoc 路径（安装时生成服务端配置）
+#   LUMO_SRC    Go 源码目录（主仓 lumo），默认 ../lumo
 set -e
 cd "$(dirname "$0")"
 
@@ -18,14 +19,15 @@ LUMO_SRC="${LUMO_SRC:-../lumo}"
 if [ -n "${LUMOS_BIN}" ]; then
     cp "${LUMOS_BIN}" app/bin/lumos
 else
-    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-        go build -trimpath -ldflags "-s -w" -o app/bin/lumos ../../cmd/lumos
+    # go build 的包路径必须在模块内：先进源码目录再编译，输出回当前目录
+    (cd "${LUMO_SRC}" && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+        go build -trimpath -ldflags "-s -w" -o "$OLDPWD/app/bin/lumos" ./cmd/lumos)
 fi
 if [ -n "${LUMOC_BIN}" ]; then
     cp "${LUMOC_BIN}" app/bin/lumoc
 else
-    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-        go build -trimpath -ldflags "-s -w" -o app/bin/lumoc ../../cmd/lumoc
+    (cd "${LUMO_SRC}" && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+        go build -trimpath -ldflags "-s -w" -o "$OLDPWD/app/bin/lumoc" ./cmd/lumoc)
 fi
 chmod 755 app/bin/lumos app/bin/lumoc
 
