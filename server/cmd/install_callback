@@ -6,6 +6,9 @@
 #      数据目录 tunnel-secret.txt（0600），客户端连接时用；
 #   3) 控制台密码留空时自动生成，安装日志里可以看到。
 #
+# 口令安全：控制台密码与 Basic 密码先经 `lumoc hashpass` 转成 PBKDF2
+# 哈希再写入 lumos.toml —— 配置文件被读走也拿不到可用密码。
+#
 # 注意：飞牛的 password 类型字段不会作为环境变量传给安装脚本，
 # 所以向导里凡是需要参与配置的字段一律用 text 类型。
 
@@ -32,6 +35,17 @@ say() {
     printf '%s\n' "$1" >&2
 }
 
+genpw() {
+    local pw
+    pw="$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20)"
+    [ -n "${pw}" ] || pw="lumo$(date +%s)"
+    printf '%s' "${pw}"
+}
+
+hashpw() {
+    "${LUMOC}" hashpass "$1" || fail "LUMO 服务端安装失败：口令哈希生成出错"
+}
+
 [ -n "${PKGVAR}" ] || fail "LUMO 服务端安装失败：缺少 TRIM_PKGVAR"
 [ -x "${LUMOC}" ] || fail "LUMO 服务端安装失败：缺少程序 ${LUMOC}"
 
@@ -48,31 +62,66 @@ BPASS="${basicPass:-}"
 
 # 首次安装：生成服务端配置与隧道密钥
 if [ ! -f "${TOML}" ]; then
-    if [ -z "${BPASS}" ]; then
-        BPASS="$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20)"
-        [ -n "${BPASS}" ] || BPASS="lumo$(date +%s)"
+    GENERATED_CONSOLE=0
+    if [ -z "${CPASS}" ]; then
+        CPASS="$(genpw)"
+        GENERATED_CONSOLE=1
     fi
+    GENERATED_BASIC=0
+    if [ -z "${BPASS}" ]; then
+        BPASS="$(genpw)"
+        GENERATED_BASIC=1
+    fi
+    CPASS_HASH="$(hashpw "${CPASS}")"
+    BPASS_HASH="$(hashpw "${BPASS}")"
     ARGS=(server --out "${TOML}" --bind-port "${BIND_PORT}" --kcp-port "${KCP_PORT}" \
         --vhost-port "${VHOST_PORT}" --web-user "${CUSER}" \
-        --web-basic-user "${BUSER}" --web-basic-pass "${BPASS}")
-    [ -n "${CPASS}" ] && ARGS+=(--web-pass "${CPASS}")
+        --web-pass "${CPASS_HASH}" \
+        --web-basic-user "${BUSER}" --web-basic-pass "${BPASS_HASH}")
     OUT="$("${LUMOC}" "${ARGS[@]}")" || fail "LUMO 服务端安装失败：生成配置出错"
     SECRET=$(printf '%s\n' "${OUT}" | sed -n 's/^SECRET=//p')
-    WEBPASS=$(printf '%s\n' "${OUT}" | sed -n 's/^WEB_PASS=//p')
 
     if [ -n "${SECRET}" ]; then
         printf '%s' "${SECRET}" > "${SECRET_FILE}"
         chmod 600 "${SECRET_FILE}"
         say "隧道密钥已生成，保存在数据目录 tunnel-secret.txt（客户端连接时使用，请妥善保管）"
-        say "Basic 认证账号：${BUSER}（密码见应用日志）"
     fi
-    if [ -z "${CPASS}" ] && [ -n "${WEBPASS}" ]; then
+    if [ "${GENERATED_CONSOLE}" -eq 1 ]; then
         say "控制台账号：${CUSER}"
-        say "控制台密码：${WEBPASS}"
+        say "控制台密码：${CPASS}"
     else
         say "控制台账号：${CUSER}（密码为你安装时设置的）"
     fi
+    if [ "${GENERATED_BASIC}" -eq 1 ]; then
+        say "Basic 认证账号：${BUSER}（密码：${BPASS}）"
+    else
+        say "Basic 认证账号：${BUSER}（密码为你安装时设置的）"
+    fi
     say "服务端口：${BIND_PORT}  KCP 端口：${KCP_PORT}  HTTP 端口：${VHOST_PORT}"
+else
+    # 重装/升级：toml 已存在。旧版安装可能没有 Basic 层键——补进
+    # [webServer] 表，不再静默丢弃向导输入。
+    if ! grep -q '^basicUser' "${TOML}"; then
+        GENERATED_BASIC=0
+        if [ -z "${BPASS}" ]; then
+            BPASS="$(genpw)"
+            GENERATED_BASIC=1
+        fi
+        BPASS_HASH="$(hashpw "${BPASS}")"
+        sed -i "/^password = /a basicUser = \"${BUSER}\"\nbasicPassword = \"${BPASS_HASH}\"" "${TOML}"
+        chmod 600 "${TOML}"
+        if [ "${GENERATED_BASIC}" -eq 1 ]; then
+            say "Basic 认证账号：${BUSER}（密码：${BPASS}）"
+        else
+            say "Basic 认证账号：${BUSER}（密码为你安装时设置的）"
+        fi
+    elif [ -n "${BPASS}" ]; then
+        # 已有 Basic 层且向导里重新填了：以向导为准
+        BPASS_HASH="$(hashpw "${BPASS}")"
+        sed -i "s|^basicUser = .*|basicUser = \"${BUSER}\"|; s|^basicPassword = .*|basicPassword = \"${BPASS_HASH}\"|" "${TOML}"
+        chmod 600 "${TOML}"
+        say "Basic 认证账号：${BUSER}（密码为你安装时设置的）"
+    fi
 fi
 chmod 600 "${TOML}" 2>/dev/null || true
 

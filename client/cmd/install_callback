@@ -3,6 +3,11 @@
 #   1) 用向导里填的服务端地址/端口/密钥直接生成连接配置 —— 装完即可连上；
 #   2) 生成控制台登录账号密码（本地凭据，向导填了就用填的）。
 #
+# 口令安全：控制台密码与 Basic 密码一律先经 `lumoc hashpass` 转成
+# PBKDF2 哈希再写入 console.env —— 配置文件被读走也拿不到可用密码。
+# 自动生成的密码只在安装输出里展示一次（lumoc ui 首次启动还会把
+# 残留的明文迁移为哈希）。
+#
 # 注意：飞牛的 password 类型字段不会作为环境变量传给安装脚本，
 # 所以向导里凡是需要参与配置的字段一律用 text 类型。
 
@@ -30,6 +35,17 @@ say() {
     printf '%s\n' "$1" >&2
 }
 
+genpw() {
+    local pw
+    pw="$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20)"
+    [ -n "${pw}" ] || pw="lumo$(date +%s)"
+    printf '%s' "${pw}"
+}
+
+hashpw() {
+    "${LUMOC}" hashpass "$1" || fail "LUMO 安装失败：口令哈希生成出错"
+}
+
 [ -n "${PKGVAR}" ] || fail "LUMO 安装失败：缺少 TRIM_PKGVAR"
 [ -x "${LUMOC}" ] || fail "LUMO 安装失败：缺少客户端程序 ${LUMOC}"
 
@@ -48,26 +64,59 @@ BPASS="${basicPass:-}"
 # 控制台凭据
 if [ ! -f "${CONF}" ]; then
     if [ -z "${CPASS}" ]; then
-        CPASS="$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 16)"
-        [ -n "${CPASS}" ] || CPASS="lumo$(date +%s)"
+        CPASS="$(genpw)"
         say "控制台账号：${CUSER}"
         say "控制台密码：${CPASS}"
     else
         say "控制台账号：${CUSER}（密码为你安装时设置的）"
     fi
+    GENERATED_BASIC=0
     if [ -z "${BPASS}" ]; then
-        BPASS="$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20)"
-        [ -n "${BPASS}" ] || BPASS="lumo$(date +%s)"
+        BPASS="$(genpw)"
+        GENERATED_BASIC=1
     fi
+    CPASS_HASH="$(hashpw "${CPASS}")"
+    BPASS_HASH="$(hashpw "${BPASS}")"
     cat > "${CONF}" <<ENVEOF
 ADDR="0.0.0.0:7505"
 CONSOLE_USER="${CUSER}"
-CONSOLE_PASS="${CPASS}"
+CONSOLE_PASS="${CPASS_HASH}"
 BASIC_USER="${BUSER:-lumo}"
-BASIC_PASS="${BPASS}"
+BASIC_PASS="${BPASS_HASH}"
 ENVEOF
     chmod 600 "${CONF}"
-    say "Basic 认证账号：${BUSER:-lumo}（密码见应用日志）"
+    if [ "${GENERATED_BASIC}" -eq 1 ]; then
+        say "Basic 认证账号：${BUSER:-lumo}（密码：${BPASS}）"
+    else
+        say "Basic 认证账号：${BUSER:-lumo}（密码为你安装时设置的）"
+    fi
+else
+    # 重装/升级：console.env 已存在。旧版安装可能没有 Basic 层键
+    #（升级前的 env 只有三行）——补写，不再静默丢弃向导输入。
+    if ! grep -q '^BASIC_USER=' "${CONF}"; then
+        GENERATED_BASIC=0
+        if [ -z "${BPASS}" ]; then
+            BPASS="$(genpw)"
+            GENERATED_BASIC=1
+        fi
+        BPASS_HASH="$(hashpw "${BPASS}")"
+        {
+            printf 'BASIC_USER="%s"\n' "${BUSER:-lumo}"
+            printf 'BASIC_PASS="%s"\n' "${BPASS_HASH}"
+        } >> "${CONF}"
+        chmod 600 "${CONF}"
+        if [ "${GENERATED_BASIC}" -eq 1 ]; then
+            say "Basic 认证账号：${BUSER:-lumo}（密码：${BPASS}）"
+        else
+            say "Basic 认证账号：${BUSER:-lumo}（密码为你安装时设置的）"
+        fi
+    elif [ -n "${BPASS}" ]; then
+        # 已有 Basic 层且向导里重新填了：以向导为准
+        BPASS_HASH="$(hashpw "${BPASS}")"
+        sed -i "s|^BASIC_USER=.*|BASIC_USER=\"${BUSER:-lumo}\"|; s|^BASIC_PASS=.*|BASIC_PASS=\"${BPASS_HASH}\"|" "${CONF}"
+        chmod 600 "${CONF}"
+        say "Basic 认证账号：${BUSER:-lumo}（密码为你安装时设置的）"
+    fi
 fi
 
 # 连接配置：直接用向导参数生成

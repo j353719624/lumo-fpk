@@ -49,9 +49,9 @@ check_process() {
 }
 
 client_cmd() {
-    # 等号形式传参：密码为空时 "--pass --base" 会被 flag 解析成 pass=--base，
-    # 后面的 --store 直接丢失。
-    echo "${LUMOC} ui --addr=${CONSOLE_ADDR} --socket=${APP_SOCKET} --user=${CONSOLE_USER} --pass=${CONSOLE_PASS} --base=${BASE} --store=${LOG_DIR}/lumo-configs.json --basic-user=${BASIC_USER} --basic-pass=${BASIC_PASS}"
+    # 凭证经 --auth-file 从 console.env 读取（lumoc ui 自行解析并支持
+    # PBKDF2 哈希）：命令行与 ps 里不再出现任何密码。
+    echo "${LUMOC} ui --addr=${CONSOLE_ADDR} --socket=${APP_SOCKET} --auth-file=${LOG_DIR}/console.env --base=${BASE} --store=${LOG_DIR}/lumo-configs.json"
 }
 
 start_lumoc() {

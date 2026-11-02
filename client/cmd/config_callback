@@ -1,24 +1,31 @@
 #!/bin/bash
 # 设置页改动后：重启服务让新参数生效。
 # 连接参数（服务端地址/密钥）由控制台管理，这里只处理控制台账号相关。
+#
+# 口令先经 `lumoc hashpass` 哈希再落盘；只替换 CONSOLE_* 两行，
+# 不重写整个文件——Basic 层键（BASIC_USER/BASIC_PASS）必须保留。
 
 set -u
 
 APPDEST="${TRIM_APPDEST:-}"
 PKGVAR="${TRIM_PKGVAR:-}"
 MAIN="${APPDEST}/cmd/main"
+LUMOC="${APPDEST}/bin/lumoc"
 CONF="${PKGVAR}/console.env"
 
 if [ -n "${consoleUser:-}" ] || [ -n "${consolePass:-}" ]; then
     CU="${consoleUser:-admin}"
-    CP="${consolePass:-}"
-    if [ -n "${CP}" ]; then
-        cat > "${CONF}" <<ENVEOF
-ADDR="0.0.0.0:7505"
-CONSOLE_USER="${CU}"
-CONSOLE_PASS="${CP}"
-ENVEOF
+    if [ -x "${LUMOC}" ] && [ -n "${consolePass:-}" ]; then
+        CP_HASH="$("${LUMOC}" hashpass "${consolePass}")" || exit 1
+        if [ -f "${CONF}" ]; then
+            sed -i "s|^CONSOLE_USER=.*|CONSOLE_USER=\"${CU}\"|; s|^CONSOLE_PASS=.*|CONSOLE_PASS=\"${CP_HASH}\"|" "${CONF}"
+        else
+            printf 'ADDR="0.0.0.0:7505"\nCONSOLE_USER="%s"\nCONSOLE_PASS="%s"\n' "${CU}" "${CP_HASH}" > "${CONF}"
+        fi
         chmod 600 "${CONF}"
+    elif [ -f "${CONF}" ]; then
+        # 只改账号不动密码（无法哈希时绝不明文落盘）
+        sed -i "s|^CONSOLE_USER=.*|CONSOLE_USER=\"${CU}\"|" "${CONF}"
     fi
 fi
 
