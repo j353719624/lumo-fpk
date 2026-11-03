@@ -16,6 +16,7 @@ cd "$(dirname "$0")"
 #   git clone https://github.com/j353719624/lumo ../lumo
 LUMO_SRC="${LUMO_SRC:-../lumo}"
 
+mkdir -p app/bin
 if [ -n "${LUMOS_BIN}" ]; then
     cp "${LUMOS_BIN}" app/bin/lumos
 else
